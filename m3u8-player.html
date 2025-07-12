@@ -47,7 +47,7 @@
   <script>
     const video = document.getElementById('player');
     const params = new URLSearchParams(window.location.search);
-    const url = params.get('url');  // 動態取得影片 URL
+    const url = decodeURIComponent(params.get("url"));
 
     const player = new Plyr(video, {
       keyboard: { global: true }
