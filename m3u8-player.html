@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HLS Video Player with Plyr</title>
+
+  <!-- Plyr CSS -->
+  <link rel="stylesheet" href="https://cdn.plyr.io/3.7.8/plyr.css" />
+  <style>
+    body {
+      margin: 0;
+      background: #000;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      width: 100vw;
+    }
+    #player {
+      width: 100%;
+      max-width: 100%;
+      max-height: none;
+      object-fit: contain; /* Keeps aspect ratio in fullscreen */
+      display: block;
+      background-color: #000;
+      border: none;
+    }
+    .player-container{
+      display: flex;
+      max-width: 100vw;
+      max-height: 100vh;
+    }
+  </style>
+</head>
+<body>
+  
+  <div class="player-container">
+    <video id="player" controls playsinline></video>
+  </div>
+  <!-- hls.js for non-Safari browsers -->
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@1.6.5"></script>
+
+  <!-- Plyr JS -->
+  <script src="https://cdn.plyr.io/3.7.8/plyr.polyfilled.js"></script>
+
+  <script>
+    const video = document.getElementById('player');
+    const params = new URLSearchParams(window.location.search);
+    const url = params.get('url');  // 動態取得影片 URL
+
+    const player = new Plyr(video, {
+      keyboard: { global: true }
+    });
+
+    if (url) {
+      if (Hls.isSupported()) {
+        const hls = new Hls();
+        hls.loadSource(url);
+        hls.attachMedia(video);
+      } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+        video.src = url;
+      }
+    } else {
+      alert("影片網址缺失，請使用 ?url=... 指定 m3u8 連結");
+    }
+  </script>
+</body>
+</html>
