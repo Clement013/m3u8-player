@@ -1,68 +1,132 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>🎞️ M3U8 Video Player</title>
-  <!-- Plyr CSS -->
-  <link rel="stylesheet" href="https://cdn.plyr.io/3.7.8/plyr.css" />
-  <style>
-    body {
-      margin: 0;
-      background: #000;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      height: 100vh;
-      width: 100vw;
-    }
-    #player {
-      width: 100%;
-      max-width: 100%;
-      max-height: none;
-      object-fit: contain; /* Keeps aspect ratio in fullscreen */
-      display: block;
-      background-color: #000;
-      border: none;
-    }
-    .player-container{
-      display: flex;
-      max-width: 100vw;
-      max-height: 100vh;
-    }
-  </style>
-</head>
-<body>
-  
-  <div class="player-container">
-    <video id="player" controls playsinline></video>
-  </div>
-  <!-- hls.js for non-Safari browsers -->
-  <script src="https://cdn.jsdelivr.net/npm/hls.js@1.6.5"></script>
+	<head>
+		<meta charset="UTF-8"/>
+		<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+		<title>HLS Video Player with Plyr</title>
 
-  <!-- Plyr JS -->
-  <script src="https://cdn.plyr.io/3.7.8/plyr.polyfilled.js"></script>
+		<!-- Plyr CSS -->
+		<link rel="stylesheet" href="https://cdn.plyr.io/3.7.8/plyr.css"/>
+		<style>
+			body {
+				margin: 0;
+				background: #000;
+				display: flex;
+				justify-content: center;
+				align-items: center;
+				height: 100vh;
+				width: 100vw;
+			}
+			#player {
+				width: 100%;
+				max-width: 100%;
+				max-height: none;
+				object-fit: contain; /* Keeps aspect ratio in fullscreen */
+				display: block;
+				background-color: #000;
+				border: none;
+			}
+			.player-container {
+				display: flex;
+				max-width: 100vw;
+				max-height: 100vh;
+			}
+		</style>
+	</head>
+	<body>
 
-  <script>
-    const video = document.getElementById('player');
-    const params = new URLSearchParams(window.location.search);
-    const url = decodeURIComponent(params.get("url"));
+		<div class="player-container">
+			<video id="player" controls playsinline></video>
+		</div>
+		<!-- hls.js for non-Safari browsers -->
+		<script src="https://cdn.jsdelivr.net/npm/hls.js@1.6.5"></script>
 
-    const player = new Plyr(video, {
-      keyboard: { global: true }
-    });
+		<!-- Plyr JS -->
+		<script src="https://cdn.plyr.io/3.7.8/plyr.polyfilled.js"></script>
 
-    if (url) {
-      if (Hls.isSupported()) {
-        const hls = new Hls();
-        hls.loadSource(url);
-        hls.attachMedia(video);
-      } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-        video.src = url;
-      }
-    } else {
-      alert("影片網址缺失，請使用 ?url=... 指定 m3u8 連結");
-    }
-  </script>
-</body>
+		<script>
+			const video = document.getElementById('player');
+			const params = new URLSearchParams(window.location.search);
+			const url = params.get('url'); // 動態取得影片 URL
+			let currentHls = null; // 跟踪当前HLS实例
+
+			const player = new Plyr(video, {
+				keyboard: {
+					global: true
+				},
+        disableContextMenu: false
+			});
+			class CustomHlsJsLoader extends Hls.DefaultConfig.loader {
+				constructor(config) {
+					super(config);
+					const load = this.load.bind(this);
+					this.load = function (context, config, callbacks) { // 拦截manifest和level请求
+						if (context.type === 'manifest' || context.type === 'level') {
+							const onSuccess = callbacks.onSuccess;
+							callbacks.onSuccess = function (response, stats, context) { // 如果是m3u8文件，处理内容以移除广告分段
+								if (response.data && typeof response.data === 'string') { // 过滤掉广告段 - 实现更精确的广告过滤逻辑
+									console.log(response.data)
+									response.data = filterAdsFromM3U8(response.data, true);
+									console.log("ED: ")
+									console.log(response.data)
+								}
+								return onSuccess(response, stats, context);
+							};
+						}
+						// 执行原始load方法
+						load(context, config, callbacks);
+					};
+				}
+			}
+
+			// 过滤可疑的广告内容
+			function filterAdsFromM3U8(m3u8Content, strictMode = false) {
+				if (! m3u8Content) 
+					return '';
+				
+
+
+				// 按行分割M3U8内容
+				const lines = m3u8Content.split('\n');
+				const filteredLines = [];
+
+				for (let i = 0; i < lines.length; i++) {
+					const line = lines[i];
+
+					// 只过滤#EXT-X-DISCONTINUITY标识
+					if (! line.includes('#EXT-X-DISCONTINUITY')) {
+						filteredLines.push(line);
+					}
+				}
+
+				return filteredLines.join('\n');
+			}
+			// 配置HLS.js选项
+			const hlsConfig = {
+				debug: true,
+				loader: CustomHlsJsLoader,
+				enableWorker: true,
+				lowLatencyMode: false,
+			};
+
+			if (url) {
+				if (Hls.isSupported()) {
+					if (currentHls && currentHls.destroy) {
+						try {
+							currentHls.destroy();
+						} catch (e) {}
+					}
+
+					const hls = new Hls(hlsConfig);
+          currentHls = hls;
+					hls.loadSource(url);
+					hls.attachMedia(video);
+				} else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+					video.src = url;
+				}
+			} else {
+				alert("影片網址缺失，請使用 ?url=... 指定 m3u8 連結");
+			}
+		</script>
+	</body>
 </html>
